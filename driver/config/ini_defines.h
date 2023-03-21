@@ -27,9 +27,11 @@
 #define INI_CALOCATION      "CALocation"
 #define INI_PATH            "Path"            /* Path portion of the URL */
 #define INI_DATABASE        "Database"        /* Database Name */
+#define INI_SOURCE_ID "SourceID"              /* "cb" or "ch" */
 #define INI_HUGE_INT_AS_STRING "HugeIntAsString"
 #define INI_STRINGMAXLENGTH "StringMaxLength"
 #define INI_DRIVERLOG       "DriverLog"
+#define INI_SOURCE_ID "SourceID" /* "cb" or "ch" */
 #define INI_DRIVERLOGFILE   "DriverLogFile"
 
 #if defined(UNICODE)
@@ -48,6 +50,7 @@
 #define INI_VERIFY_CONNECTION_EARLY_DEFAULT "off"
 #define INI_SSLMODE_DEFAULT         ""
 #define INI_DATABASE_DEFAULT        ""
+#define INI_SOURCE_ID_DEFAULT "cb"
 #define INI_HUGE_INT_AS_STRING_DEFAULT "off"
 #define INI_STRINGMAXLENGTH_DEFAULT "1048575"
 

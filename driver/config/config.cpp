@@ -54,6 +54,7 @@ void readDSNinfo(ConnInfo * ci, bool overwrite) {
     GET_CONFIG(verify_connection_early, INI_VERIFY_CONNECTION_EARLY, INI_VERIFY_CONNECTION_EARLY_DEFAULT);
     GET_CONFIG(sslmode,         INI_SSLMODE,         INI_SSLMODE_DEFAULT);
     GET_CONFIG(database,        INI_DATABASE,        INI_DATABASE_DEFAULT);
+    GET_CONFIG(sid,        INI_SOURCE_ID,        INI_SOURCE_ID_DEFAULT);
     GET_CONFIG(huge_int_as_string, INI_HUGE_INT_AS_STRING, INI_HUGE_INT_AS_STRING_DEFAULT);
     GET_CONFIG(stringmaxlength, INI_STRINGMAXLENGTH, INI_STRINGMAXLENGTH_DEFAULT);
     GET_CONFIG(driverlog,       INI_DRIVERLOG,       INI_DRIVERLOG_DEFAULT);
@@ -95,6 +96,7 @@ void writeDSNinfo(const ConnInfo * ci) {
     WRITE_CONFIG(verify_connection_early, INI_VERIFY_CONNECTION_EARLY);
     WRITE_CONFIG(sslmode,         INI_SSLMODE);
     WRITE_CONFIG(database,        INI_DATABASE);
+    WRITE_CONFIG(sid,        INI_SOURCE_ID);
     WRITE_CONFIG(huge_int_as_string, INI_HUGE_INT_AS_STRING);
     WRITE_CONFIG(stringmaxlength, INI_STRINGMAXLENGTH);
     WRITE_CONFIG(driverlog,       INI_DRIVERLOG);
@@ -340,6 +342,7 @@ key_value_map_t readDSNInfo(const std::string & dsn_utf8) {
             INI_CALOCATION,
             INI_PATH,
             INI_DATABASE,
+            INI_SOURCE_ID,
             INI_STRINGMAXLENGTH,
             INI_DRIVERLOG,
             INI_DRIVERLOGFILE

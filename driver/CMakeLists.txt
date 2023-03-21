@@ -63,12 +63,14 @@ add_library (${libname}-impl STATIC
     escaping/lexer.cpp
 
     format/ODBCDriver2.cpp
+    format/CBAS.cpp
     format/RowBinaryWithNamesAndTypes.cpp
 
     api/impl/impl.cpp
 
     attributes.cpp
     connection.cpp
+    cJSON.c
     descriptor.cpp
     diagnostics.cpp
     driver.cpp
@@ -107,10 +109,12 @@ add_library (${libname}-impl STATIC
     api/impl/impl.h
 
     format/ODBCDriver2.h
+    format/CBAS.h
     format/RowBinaryWithNamesAndTypes.h
 
     attributes.h
     connection.h
+    cJSON.h
     descriptor.h
     diagnostics.h
     driver.h

@@ -1,8 +1,9 @@
+#include "driver/statement.h"
+#include "driver/cJSON.h"
+#include "driver/escaping/escape_sequences.h"
+#include "driver/escaping/lexer.h"
 #include "driver/platform/platform.h"
 #include "driver/utils/utils.h"
-#include "driver/escaping/lexer.h"
-#include "driver/escaping/escape_sequences.h"
-#include "driver/statement.h"
 
 #include <Poco/Exception.h>
 #include <Poco/Net/HTTPClientSession.h>
@@ -14,6 +15,7 @@
 
 #include <cctype>
 #include <cstdio>
+#include <sstream>
 
 Statement::Statement(Connection & connection)
     : ChildType(connection)
@@ -76,7 +78,7 @@ void Statement::requestNextPackOfResultSets(std::unique_ptr<ResultMutator> && mu
 
     auto & connection = getParent();
 
-    if (connection.session && response && in)
+    if (!connection.isCB && connection.session && response && in)
         if (in->fail() || !in->eof())
             connection.session->reset();
 
@@ -108,71 +110,101 @@ void Statement::requestNextPackOfResultSets(std::unique_ptr<ResultMutator> && mu
 
     const auto prepared_query = buildFinalQuery(param_bindings);
 
+
     // TODO: set this only after this single query is fully fetched (when output parameter support is added)
     auto * param_set_processed_ptr = getEffectiveDescriptor(SQL_ATTR_IMP_PARAM_DESC).getAttrAs<SQLULEN *>(SQL_DESC_ROWS_PROCESSED_PTR, 0);
     if (param_set_processed_ptr)
         *param_set_processed_ptr = next_param_set_idx;
 
-    Poco::Net::HTTPRequest request;
-    request.setMethod(Poco::Net::HTTPRequest::HTTP_POST);
-    request.setVersion(Poco::Net::HTTPRequest::HTTP_1_1);
-    request.setKeepAlive(true);
-    request.setChunkedTransferEncoding(true);
-    request.setCredentials("Basic", connection.buildCredentialsString());
-    request.setHost(uri.getHost());
-    request.setURI(uri.getPathEtc());
-    request.set("User-Agent", connection.buildUserAgentString());
 
-    LOG(request.getMethod() << " " << request.getHost() << request.getURI() << " body=" << prepared_query
-                            << " UA=" << request.get("User-Agent"));
+    if (!connection.isCB) {
+        Poco::Net::HTTPRequest request;
+        request.setMethod(Poco::Net::HTTPRequest::HTTP_POST);
+        request.setVersion(Poco::Net::HTTPRequest::HTTP_1_1);
+        request.setKeepAlive(true);
+        request.setChunkedTransferEncoding(true);
+        request.setCredentials("Basic", connection.buildCredentialsString());
+        request.setHost(uri.getHost());
+        request.setURI(uri.getPathEtc());
+        request.set("User-Agent", connection.buildUserAgentString());
 
-    int redirect_count = 0;
-    // Send request to server with finite count of retries.
-    for (int i = 1;; ++i) {
-        try {
-            for (; redirect_count < connection.redirect_limit; ++redirect_count) {
-                connection.session->sendRequest(request) << prepared_query;
-                response = std::make_unique<Poco::Net::HTTPResponse>();
-                in = &connection.session->receiveResponse(*response);
-                auto status = response->getStatus();
-                if (status != Poco::Net::HTTPResponse::HTTP_PERMANENT_REDIRECT && status != Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT) {
-                    break;
+        LOG(request.getMethod() << " " << request.getHost() << request.getURI() << " body=" << prepared_query
+                                << " UA=" << request.get("User-Agent"));
+
+        int redirect_count = 0;
+        // Send request to server with finite count of retries.
+        for (int i = 1;; ++i) {
+            try {
+                for (; redirect_count < connection.redirect_limit; ++redirect_count) {
+                    connection.session->sendRequest(request) << prepared_query;
+                    response = std::make_unique<Poco::Net::HTTPResponse>();
+                    in = &connection.session->receiveResponse(*response);
+                    auto status = response->getStatus();
+                    if (status != Poco::Net::HTTPResponse::HTTP_PERMANENT_REDIRECT
+                        && status != Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT) {
+                        break;
+                    }
+                    connection.session->reset(); // reset keepalived connection
+                    auto newLocation = response->get("Location");
+                    LOG("Redirected to " << newLocation << ", redirect index=" << redirect_count + 1 << "/" << connection.redirect_limit);
+                    uri = newLocation;
+                    connection.session->setHost(uri.getHost());
+                    connection.session->setPort(uri.getPort());
+                    request.setHost(uri.getHost());
+                    request.setURI(uri.getPathEtc());
                 }
+                break;
+            } catch (const Poco::IOException & e) {
                 connection.session->reset(); // reset keepalived connection
-                auto newLocation = response->get("Location");
-                LOG("Redirected to " << newLocation << ", redirect index=" << redirect_count + 1 << "/" << connection.redirect_limit);
-                uri = newLocation;
-                connection.session->setHost(uri.getHost());
-                connection.session->setPort(uri.getPort());
-                request.setHost(uri.getHost());
-                request.setURI(uri.getPathEtc());
+                LOG("Http request try=" << i << "/" << connection.retry_count << " failed: " << e.what() << ": " << e.message());
+                if (i > connection.retry_count)
+                    throw;
             }
-            break;
-        } catch (const Poco::IOException & e) {
-            connection.session->reset(); // reset keepalived connection
-            LOG("Http request try=" << i << "/" << connection.retry_count << " failed: " << e.what() << ": " << e.message());
-            if (i > connection.retry_count)
-                throw;
         }
-    }
 
-    Poco::Net::HTTPResponse::HTTPStatus status = response->getStatus();
-    if (status != Poco::Net::HTTPResponse::HTTP_OK) {
-        std::stringstream error_message;
-        if (status == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || status == Poco::Net::HTTPResponse::HTTP_PERMANENT_REDIRECT) {
-            error_message << "Redirect count exceeded" << std::endl << "Redirect limit: " << connection.redirect_limit << std::endl;
-        } else {
-            error_message << "HTTP status code: " << status << std::endl << "Received error:" << std::endl << in->rdbuf() << std::endl;
+        Poco::Net::HTTPResponse::HTTPStatus status = response->getStatus();
+        if (status != Poco::Net::HTTPResponse::HTTP_OK) {
+            std::stringstream error_message;
+            if (status == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT || status == Poco::Net::HTTPResponse::HTTP_PERMANENT_REDIRECT) {
+                error_message << "Redirect count exceeded" << std::endl << "Redirect limit: " << connection.redirect_limit << std::endl;
+            } else {
+                error_message << "HTTP status code: " << status << std::endl << "Received error:" << std::endl << in->rdbuf() << std::endl;
+            }
+            LOG(error_message.str());
+            throw std::runtime_error(error_message.str());
         }
-        LOG(error_message.str());
-        throw std::runtime_error(error_message.str());
-    }
 
-    result_reader = make_result_reader(
-        response->get("X-Couchbase-Format", connection.default_format),
-        response->get("X-Couchbase-Timezone", Poco::Timezone::name()),
-        *in, std::move(mutator)
-    );
+
+        result_reader = make_result_reader(response->get("X-Couchbase-Format", connection.default_format),
+            response->get("X-Couchbase-Timezone", Poco::Timezone::name()),
+            *in,
+            std::move(mutator),
+            cbCookie);
+    } else {
+        // Sample Query = "SELECT * FROM `travel-sample`.`inventory`.`airline_view` LIMIT 2";
+        // Sample Query = "SELECT apv.airport_geo_lat, apv.country FROM `travel-sample`.`inventory`.`airport_view` apv LIMIT 2";
+
+        std::ostringstream payload;
+        payload << "{\"signature\":true,\"client-type\":\"jdbc\",\"plan-format\":\"string\",\"max-warnings\":10,\"sql-compat\":true,"
+                   "\"statement\":\""
+                << query << "\"}";
+
+
+        std::string payloadStr = payload.str();
+        char * queryTxt = (char *)calloc(payloadStr.size() + 1, sizeof(char));
+        memcpy(queryTxt, payloadStr.c_str(), payloadStr.size());
+
+        lcb_CMDANALYTICS * cmd;
+        lcb_cmdanalytics_create(&cmd);
+        lcb_cmdanalytics_callback(cmd, queryCallback);
+        lcb_cmdanalytics_payload(cmd, queryTxt, strlen(queryTxt));
+        connection.cb_check(lcb_analytics(connection.lcb_instance, &cbCookie, cmd), "Schedule Analytics Query");
+
+        lcb_cmdanalytics_destroy(cmd);
+        lcb_wait(connection.lcb_instance, LCB_WAIT_DEFAULT);
+
+        result_reader = make_result_reader("CBAS", "absurd_time_zone", *in, std::move(mutator), cbCookie);
+    }
 
     ++next_param_set_idx;
 }
@@ -526,5 +558,28 @@ void Statement::deallocateDescriptor(std::shared_ptr<Descriptor> & desc) {
     if (desc) {
         desc->deallocateSelf();
         desc.reset();
+    }
+}
+
+
+void Statement::queryCallback(lcb_INSTANCE * instance, int type, const lcb_RESPANALYTICS * resp) {
+    CallbackCookie * cookie;
+    const char * row;
+    size_t nrow;
+    lcb_STATUS rc = lcb_respanalytics_status(resp);
+
+    lcb_respanalytics_cookie(resp, (void **)&cookie);
+    lcb_respanalytics_row(resp, &row, &nrow);
+
+    if (rc == LCB_SUCCESS) {
+        if (lcb_respanalytics_is_final(resp)) {
+            cookie->queryMeta.assign(row, nrow);
+        } else {
+            cookie->queryResultStrm.write(row, nrow);
+            cookie->queryResultStrm << "\n";
+        }
+    }
+    if (rc != LCB_SUCCESS) {
+        std::cout << "Query Failed\n";
     }
 }

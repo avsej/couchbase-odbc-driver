@@ -28,6 +28,7 @@ struct ConnInfo {
     std::string certificateFile;
     std::string caLocation;
     std::string database;
+    std::string sid;
     std::string huge_int_as_string;
     std::string stringmaxlength;
     std::string driverlog;

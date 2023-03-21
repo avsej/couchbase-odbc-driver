@@ -68,8 +68,11 @@ public:
     /// Make an implicit descriptor active again.
     void setImplicitDescriptor(SQLINTEGER type);
 
+    CallbackCookie cbCookie;
+
 private:
     void requestNextPackOfResultSets(std::unique_ptr<ResultMutator> && mutator);
+    static void queryCallback(lcb_INSTANCE * instance, int type, const lcb_RESPANALYTICS * resp);
 
     void processEscapeSequences();
     void extractParametersinfo();
