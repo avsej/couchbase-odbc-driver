@@ -414,6 +414,7 @@ SQLRETURN SQL_API EXPORTED_FUNCTION_MAYBE_W(SQLGetInfo)(
 #undef CASE_STRING
 
         }
+        return SQL_ERROR; // unreachable, default case throws
     };
 
     return CALL_WITH_TYPED_HANDLE(SQL_HANDLE_DBC, connection_handle, func);
