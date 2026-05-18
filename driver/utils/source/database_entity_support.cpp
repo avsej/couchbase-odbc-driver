@@ -24,4 +24,5 @@ bool checkDatabaseEntitySupport(Statement& statement){
     } else {
         std::cout<<"LOG: Error Occurred while Fetching" << std::endl;
     }
+    return false;
 }
