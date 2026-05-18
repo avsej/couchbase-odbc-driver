@@ -16,8 +16,24 @@ set(LCB_BUILD_DTRACE OFF CACHE BOOL "" FORCE)
 set(LCB_UNINSTALL_TARGET OFF CACHE BOOL "" FORCE)
 set(LCB_BUILD_STATIC 1 CACHE INTERNAL "" FORCE)
 
-cbdep_install(PACKAGE openssl VERSION ${OPENSSL_VERSION})
-set(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}/openssl-${OPENSSL_VERSION}")
+# On macOS, use Homebrew's OpenSSL (keg-only, not on default search path).
+# On other platforms, use cbdep to download OpenSSL.
+if (APPLE)
+    if (NOT OPENSSL_ROOT_DIR AND NOT DEFINED ENV{OPENSSL_ROOT_DIR})
+        find_program (_brew_executable brew)
+        if (_brew_executable)
+            execute_process (
+                COMMAND ${_brew_executable} --prefix openssl@3
+                OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+        endif ()
+    endif ()
+else ()
+    cbdep_install(PACKAGE openssl VERSION ${OPENSSL_VERSION})
+    set(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}/openssl-${OPENSSL_VERSION}")
+endif ()
 add_subdirectory (libcouchbase)
 
 if (CH_ODBC_PREFER_BUNDLED_POCO OR NOT Poco_FOUND)
