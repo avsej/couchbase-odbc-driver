@@ -1,18 +1,58 @@
 # Downloads the 'cbdep' utility and defines a macro "cbdep_install()"
 # to make use of it
-# Note: this assumes we are on Windows in several places
 
 set (CBDEP_VERSION 1.1.8)
 
+# Platform detection for cbdep binary download and install flags
+if (WIN32)
+  set (_cbdep_os "windows")
+  set (_cbdep_exe_suffix ".exe")
+  set (_cbdep_install_platform "windows")
+elseif (APPLE)
+  set (_cbdep_os "darwin")
+  set (_cbdep_exe_suffix "")
+  set (_cbdep_install_platform "macos")
+else ()
+  set (_cbdep_os "linux")
+  set (_cbdep_exe_suffix "")
+  set (_cbdep_install_platform "linux")
+endif ()
+
+# Architecture detection
+# Note: this runs before project(), so CMAKE_SYSTEM_PROCESSOR isn't set yet.
+# Use uname on non-Windows, hardcode x86_64 on Windows.
+if (WIN32)
+  set (_cbdep_arch "x86_64")
+else ()
+  execute_process (COMMAND uname -m
+    OUTPUT_VARIABLE _cbdep_arch
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (_cbdep_arch MATCHES "(x86_64|amd64|AMD64)")
+    set (_cbdep_arch "x86_64")
+  elseif (_cbdep_arch MATCHES "(aarch64|arm64|ARM64)")
+    set (_cbdep_arch "arm64")
+  endif ()
+endif ()
+
 # Utilitize cbdep's own cache dir
-set (_cbdepcache_dir "$ENV{HOMEDRIVE}/$ENV{HOMEPATH}/.cbdepcache")
+if (WIN32)
+  set (_cbdepcache_dir "$ENV{HOMEDRIVE}/$ENV{HOMEPATH}/.cbdepcache")
+else ()
+  set (_cbdepcache_dir "$ENV{HOME}/.cbdepcache")
+endif ()
 if (NOT IS_DIRECTORY "${_cbdepcache_dir}")
   file (MAKE_DIRECTORY "${_cbdepcache_dir}")
 endif ()
 
-set (CBDEP_EXE "${_cbdepcache_dir}/cbdep-${CBDEP_VERSION}.exe")
+set (CBDEP_EXE "${_cbdepcache_dir}/cbdep-${CBDEP_VERSION}${_cbdep_exe_suffix}")
 if (NOT EXISTS "${CBDEP_EXE}")
-  set (_cbdep_url "https://packages.couchbase.com/cbdep/${CBDEP_VERSION}/cbdep-${CBDEP_VERSION}-windows-x86_64.exe")
+  if (_cbdep_os STREQUAL "windows")
+    set (_cbdep_url "https://packages.couchbase.com/cbdep/${CBDEP_VERSION}/cbdep-${CBDEP_VERSION}-windows-x86_64.exe")
+  elseif (_cbdep_os STREQUAL "darwin")
+    set (_cbdep_url "https://packages.couchbase.com/cbdep/${CBDEP_VERSION}/cbdep-${CBDEP_VERSION}-darwin-${_cbdep_arch}")
+  else ()
+    set (_cbdep_url "https://packages.couchbase.com/cbdep/${CBDEP_VERSION}/cbdep-${CBDEP_VERSION}-linux-${_cbdep_arch}")
+  endif ()
   message (STATUS "Downloading cbdep ${CBDEP_VERSION}...")
   file (DOWNLOAD "${_cbdep_url}" "${CBDEP_EXE}" STATUS _stat SHOW_PROGRESS)
   list (GET _stat 0 _retval)
@@ -20,8 +60,11 @@ if (NOT EXISTS "${CBDEP_EXE}")
     file (REMOVE "${CBDEP_EXE}")
     list (GET _stat 1 _message)
     message (
-      FATAL_ERROR "Error downloading ${cbdep_url}: ${_message} (${_retval})"
+      FATAL_ERROR "Error downloading ${_cbdep_url}: ${_message} (${_retval})"
     )
+  endif ()
+  if (NOT WIN32)
+    execute_process (COMMAND chmod "+x" "${CBDEP_EXE}")
   endif ()
 endif ()
 
@@ -41,7 +84,7 @@ MACRO (CBDEP_INSTALL)
   IF(NOT IS_DIRECTORY "${cbdep_INSTALL_DIR}/${cbdep_PACKAGE}-${cbdep_VERSION}")
     MESSAGE (STATUS "Downloading and caching ${cbdep_PACKAGE}-${cbdep_VERSION}")
     EXECUTE_PROCESS (
-      COMMAND "${CBDEP_EXE}" -p windows
+      COMMAND "${CBDEP_EXE}" -p "${_cbdep_install_platform}"
         install -d "${cbdep_INSTALL_DIR}"
         ${cbdep_PACKAGE} ${cbdep_VERSION}
       RESULT_VARIABLE _cbdep_result
