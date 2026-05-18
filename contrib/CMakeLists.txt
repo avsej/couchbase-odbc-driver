@@ -70,6 +70,12 @@ if (CH_ODBC_PREFER_BUNDLED_POCO OR NOT Poco_FOUND)
     set (ENABLE_DATA OFF CACHE BOOL "" FORCE)
     set (ENABLE_NETSSL OFF CACHE BOOL "" FORCE)
 
+    # On macOS, use system zlib/pcre2 instead of bundled ones to avoid
+    # macro conflicts with system headers (e.g., fdopen redefinition).
+    if (APPLE)
+        set (POCO_UNBUNDLED ON CACHE BOOL "" FORCE)
+    endif ()
+
     add_subdirectory (poco)
 
     set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH_bak})
@@ -78,9 +84,12 @@ if (CH_ODBC_PREFER_BUNDLED_POCO OR NOT Poco_FOUND)
     add_library(Poco::Net ALIAS Net)
     add_library(Poco::Foundation ALIAS Foundation)
 
-    # Remove pthread from linking poco's Net
-    set_property (TARGET Net PROPERTY INTERFACE_LINK_LIBRARIES "")
-    set_property (TARGET Foundation PROPERTY INTERFACE_LINK_LIBRARIES "")
+    # Remove pthread from linking poco's Net (but preserve other dependencies
+    # like pcre2 and zlib needed when POCO_UNBUNDLED is set).
+    if (NOT POCO_UNBUNDLED)
+        set_property (TARGET Net PROPERTY INTERFACE_LINK_LIBRARIES "")
+        set_property (TARGET Foundation PROPERTY INTERFACE_LINK_LIBRARIES "")
+    endif ()
 endif ()
 
 if (MSVC)
