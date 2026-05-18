@@ -158,6 +158,12 @@ target_include_directories (${libname}-impl
     PUBLIC ${PROJECT_BINARY_DIR}/contrib/libcouchbase/generated
 )
 
+include (CheckCXXCompilerFlag)
+check_cxx_compiler_flag (-Wno-sfinae-incomplete _cb_odbc_has_wno_sfinae_incomplete)
+if (_cb_odbc_has_wno_sfinae_incomplete)
+    target_compile_options (${libname}-impl PRIVATE -Wno-sfinae-incomplete)
+endif ()
+
 set (_poco_net Poco::Net)
 
 target_link_libraries (${libname}-impl
