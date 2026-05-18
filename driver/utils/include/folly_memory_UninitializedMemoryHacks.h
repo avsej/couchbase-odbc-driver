@@ -301,6 +301,18 @@ namespace detail {
 #if defined(_LIBCPP_VECTOR)
 // libc++
 
+// libc++ 15+ removed __compressed_pair. Fall back to regular resize.
+#if _LIBCPP_VERSION >= 150000
+
+template <typename T>
+void unsafeVectorSetLargerSize(std::vector<T>& v, std::size_t n) {
+  v.resize(n);
+}
+
+#define FOLLY_DECLARE_VECTOR_RESIZE_WITHOUT_INIT(TYPE)
+
+#else // _LIBCPP_VERSION < 150000
+
 template <typename T, typename Alloc = std::allocator<T>>
 struct std_vector_layout {
   static_assert(!std::is_same<T, bool>::value, "bad instance");
@@ -327,11 +339,6 @@ void unsafeVectorSetLargerSize(std::vector<T>& v, std::size_t n) {
   auto& e = *reinterpret_cast<pointer*>(l + offsetof(fake, __end_));
   e += (n - s);
 
-  // libc++ contiguous containers use special annotation functions that help
-  // the address sanitizer to detect improper memory accesses. When ASAN is
-  // enabled we need to call the appropriate annotation functions in order to
-  // stop ASAN from reporting false positives. When ASAN is disabled, the
-  // annotation function is a no-op.
 #ifndef _LIBCPP_HAS_NO_ASAN
   __sanitizer_annotate_contiguous_container(
       v.data(), v.data() + v.capacity(), v.data() + s, v.data() + n);
@@ -339,6 +346,8 @@ void unsafeVectorSetLargerSize(std::vector<T>& v, std::size_t n) {
 }
 
 #define FOLLY_DECLARE_VECTOR_RESIZE_WITHOUT_INIT(TYPE)
+
+#endif // _LIBCPP_VERSION >= 150000
 
 #elif defined(_GLIBCXX_VECTOR)
 // libstdc++
