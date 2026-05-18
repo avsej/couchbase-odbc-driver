@@ -1,7 +1,9 @@
 #include "driver/utils/include/ieee_754_converter.h"
 
+#include <cstring>
+
 uint64_t ieee_double_to_ull(double d) {
-    if (isnan(d)) {
+    if (std::isnan(d)) {
         return 0x7ff8000000000000ULL;
     }
 
