@@ -194,6 +194,18 @@ if (CH_ODBC_USE_ICU)
     if (CH_ODBC_PREFER_BUNDLED_ICU)
         message (WARNING "ICU: using bundled variant of the library currently not supported")
     endif ()
+    # Homebrew's icu4c is keg-only, so it is not on CMake's default search path.
+    if (APPLE AND NOT ICU_ROOT AND NOT DEFINED ENV{ICU_ROOT})
+        find_program (_brew_executable brew)
+        if (_brew_executable)
+            execute_process (
+                COMMAND ${_brew_executable} --prefix icu4c
+                OUTPUT_VARIABLE ICU_ROOT
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+        endif ()
+    endif ()
     find_package (ICU COMPONENTS uc REQUIRED)
 endif ()
 
