@@ -161,7 +161,7 @@ target_include_directories (${libname}-impl
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag (-Wno-sfinae-incomplete _cb_odbc_has_wno_sfinae_incomplete)
 if (_cb_odbc_has_wno_sfinae_incomplete)
-    target_compile_options (${libname}-impl PRIVATE -Wno-sfinae-incomplete)
+    target_compile_options (${libname}-impl PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-sfinae-incomplete>)
 endif ()
 
 set (_poco_net Poco::Net)
@@ -184,6 +184,10 @@ add_library (${libname} SHARED
     api/odbc.cpp
     ${WIN_SOURCES}
 )
+
+if (_cb_odbc_has_wno_sfinae_incomplete)
+    target_compile_options (${libname} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-sfinae-incomplete>)
+endif ()
 
 set_target_properties (${libname} PROPERTIES
     OUTPUT_NAME "couchbaseodbc${WIDECHAR_SUFFIX}"
