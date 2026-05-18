@@ -169,6 +169,27 @@ include (cmake/sanitize.cmake)
 find_package (Threads REQUIRED)
 find_package (ODBC REQUIRED)
 
+# Verify that ODBC headers (specifically sql.h) are actually available — the
+# FindODBC module may succeed based on runtime libraries alone (e.g. odbc_config
+# returns the include dir, but the -devel package may not be installed).
+include (CheckIncludeFile)
+set (CMAKE_REQUIRED_INCLUDES ${ODBC_DRIVER_INCLUDE_DIRS})
+check_include_file ("sql.h" _cb_odbc_has_sql_h)
+unset (CMAKE_REQUIRED_INCLUDES)
+if (NOT _cb_odbc_has_sql_h)
+  if (WIN32)
+    message (FATAL_ERROR "ODBC: sql.h not found. Install Windows SDK or Visual Studio with C++ MFC/ATL components.")
+  elseif (APPLE)
+    message (FATAL_ERROR "ODBC: sql.h not found. Install unixODBC via Homebrew:\n"
+      "  brew install unixodbc")
+  else ()
+    message (FATAL_ERROR "ODBC: sql.h not found. Install unixODBC development headers:\n"
+      "  Debian/Ubuntu: sudo apt install unixodbc-dev\n"
+      "  Fedora/RHEL:   sudo dnf install unixODBC-devel\n"
+      "  openSUSE:      sudo zypper install unixODBC-devel")
+  endif ()
+endif ()
+
 if (CH_ODBC_USE_ICU)
     if (CH_ODBC_PREFER_BUNDLED_ICU)
         message (WARNING "ICU: using bundled variant of the library currently not supported")
